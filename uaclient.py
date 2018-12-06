@@ -20,10 +20,8 @@ def fich_log(fich, evento, ip, port, coment):
                     ": " + coment + "\r\n")
     elif evento == "error":
         fich.write(" Error: " + coment + "\r\n")
-    
     elif evento == "starting":   
         fich.write(" Starting... "+ "\r\n")
-    
     elif evento == "finishing":   
         fich.write(" Finishing... "+ "\r\n")
         
@@ -38,6 +36,7 @@ if __name__ == "__main__":
         OPCION = sys.argv[3]
     except IndexError:
         sys.exit("Usage: python uaclient.py config method option")
+
         
     #SACAMOS DATOS DEL XML
     fich_xml = minidom.parse(CONFIG)
@@ -67,13 +66,11 @@ if __name__ == "__main__":
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
         my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         my_socket.connect((ip_proxy, int(puerto_proxy)))
-    
-    # Empezamos a escribir fich_log
-    fich_log(log_path,"starting",ip,puerto_serv,"") 
-        
-        
+
     # Introducioms los METODOS
     if METODO == "register":
+        # Empezamos a escribir fich_log
+        fich_log(log_path,"starting",ip,puerto_serv,"") 
         # Contenido que vamos a enviar (sip:emisor:puerto SIP/2.0)
         mensaje = (METODO.upper() + " sip:" + username + ":" + puerto_serv +
                 " SIP/2.0\r\n")
@@ -90,10 +87,6 @@ if __name__ == "__main__":
         "t=0" + "\r\n" +
         "m=audio " + puerto_rtp + " RTP" + "\r\n")
         mensaje += cabecera
-        mensj = mensaje.split("\r\n")
-        comentario = " ".join(mensj)
-        fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, mensaje)    
-     
         
     elif METODO == "bye":
         # Contenido que vamos a enviar (sip:receptor SIP/2.0)
@@ -101,8 +94,14 @@ if __name__ == "__main__":
         
     else:
         sys.exit("Metodo no valido, utiliza : REGISTER,INVITE O BYE")
-        
+    
     print("\r\nEnviando:\r\n" + mensaje)
+
+    # Escribimos lo que enviamos en fich_log    
+    mensj = mensaje.split("\r\n")
+    comentario = " ".join(mensj)
+    fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)    
+    
     my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
 
 
