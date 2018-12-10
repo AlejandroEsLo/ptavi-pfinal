@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <server name = "MiProxy" ip = "127.0.0.1" puerto = "7777" />
+    <database path = "./registro.txt" passwdpath = "./passwords.txt" />
+    <log path = "./fich_log(pr).txt" />
+</config>
