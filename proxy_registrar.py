@@ -15,23 +15,21 @@ from uaclient import fich_log
 class EchoHandler(socketserver.DatagramRequestHandler):
     """Echo server class."""
 
-    list_clients = {}
+    register_clients = {}
     
     def register2json(self):
         """Guardar los clientes en un fichero registro Json."""
-        json.dump(self.list_clients, open("registered.json", "w"))
+        json.dump(self.register_clients, open("registered.json", "w"))
 
     def json2registered(self):
         """Cargar fichero Json si existe para utilizarlo en el servidor."""
         try:
             registered_json = open("registered.json", "r")
-            self.list_clients = json.load(registered_json)
+            self.register_clients = json.load(registered_json)
 
         except FileNotFoundError:
             pass
 
-
-    # FALTA DEFINIR METODOS PARA PROXY Y CAMBIARLOS POR LOS QUE TENIAMOS EN LA P6
     def handle(self):
         """Manejador del servidor."""
         while 1:
@@ -48,59 +46,68 @@ class EchoHandler(socketserver.DatagramRequestHandler):
             
             # Escribe dirección y puerto del cliente (de tupla client_address)
             print("El cliente nos manda ", ' '.join(mensaje_cliente))
-    
-            Ip = self.client_address[0]
-            metodo = mensaje_cliente[0]
             
+            linea_coment = line.decode("utf-8").split("\r\n")
+            Ip_client = str(self.client_address[0])
+            Port_client = self.client_address[1]
+            metodo = mensaje_cliente[0]
+
+            # FALTA DEFINIR METODO REGISTER PARA PROXY !!!!!!!               
             if metodo == "REGISTER":
-                expires = int(mensaje_cliente[3].split("\\")[0])
+                expires = int(mensaje_cliente[3].split("\r\n")[0])
+                cliente_sip = mensaje_cliente[1].split(":")[1]
+                cliente_puerto = int(mensaje_cliente[1].split(":")[-1])
+                                
+                
                 # Cogemos localtime para que sea conformea nuestra hora local
                 t_inicio = time.strftime("%Y-%m-%d %H:%M:%S",
                                         time.localtime(int(time.time())))
                 t_expires = time.strftime("%Y-%m-%d %H:%M:%S",
                                       time.localtime(int(time.time() + expires)))
 
-                self.list_serv = {}
-                usuarios_expires = []
-                self.list_serv["IP"] = Ip
-                self.list_serv["EXPIRES"] = t_expires
-               # self.list_clients[direccion] = self.list_serv
-               # print(usuario, "REGISTRADO\n")
-                # Eliminamos cliente si expires = 0
-                # O si su tiempo es menor que la hora actual
-                for clients in self.list_clients:
-                    inf = self.list_clients[clients]
-                    if inf["EXPIRES"] <= t_inicio:
-                        usuarios_expires.append(clients)
-    
-                for usuario in usuarios_expires:
-                    print(usuario.split(":")[-1], "EXPIRADO\n")
-                    del self.list_clients[usuario]
-    
+                
                 self.register2json()
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-        
-                print("Lista clientes: {}".format(self.list_clients))
-                print("Lista ELIMINADOS: {}\n".format(usuarios_expires))
-           
-        
-
+                print("Usuario Registrado: {}".format(register_clients))
+                    
             elif metodo == "INVITE":
+                comentario = " ".join(linea_coment)
+                fich_log(log_path,"received",Ip_client,Port_client,comentario)                
+                ip_destino = mensaje_cliente[1].split(":")[1]
+                # Comprobamos si esta registrado el destinatario del mensaje en nuestra lista
+                if ip_destino in self.register_clients:
+                    #Si el cliente esta en nuestra lista....
+                    print("Usuario Registrado: {}".format(ip_destino))
+                                    
+                    ip_destinatario = (self.register_clients[ip_destino]["direccion"])
+                    puerto_destinatario =(self.register_clients[ip_destino]["puerto"])
+                    
+                    fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
+                                    
+                    # Creamos el socket para conectarnos con el otro cliente
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                        my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        my_socket.connect((ip_destinatario, int(puerto_destinatario)))
+                        my_socket.send(bytes(linea_coment, 'utf-8') + b'\r\n')
+                        data = my_socket.recv(1024)
+            
+                        print('Recibido:')
+                        print(data.decode('utf-8'))
                 
-                ip_destino = mensaje_cliente[1]
-                respuesta_serv = ("SIP/2.0 100 Trying\r\n\r\n"
-                                  + "SIP/2.0 180 Ringing\r\n\r\n"
-                                  + "SIP/2.0 200 OK\r\n\r\n")
-                 
-                print("Ip Destino: {}".format(ip_destino))
-                
-                # Creamos el socket para conectarnos con el servidor
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
-                    my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                  #  my_socket.connect((ip_proxy, int(puerto_proxy)))
+                        comentario = " ".join(data)
+                        fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                        self.wfile.write(bytes(data, "utf-8"))
+                else:
+                    #Si el cliente NO esta en nuestra lista....
+                    respuesta_serv = "SIP/2.0 404 User Not Found"
+                    print("Usuario NO registrado {}".format(ip_destino))
+                    print("\r\nEnviando:\r\n" + respuesta_serv)
                     self.wfile.write(bytes(respuesta_serv, "utf-8"))
-
+                    mensaje = respuesta_serv.split("\r\n")
+                    comentario = " ".join(mensaje)
+                    fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                
             elif metodo == "ACK":
                 # aEjecutar es un string con lo que ejcutara en la shell
           #      aEjecutar = ("mp32rtp -i " + Ip + " -p 23032 < " + audio_path)
@@ -111,14 +118,27 @@ class EchoHandler(socketserver.DatagramRequestHandler):
             elif metodo == "BYE":
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-
+                print("\r\nEnviando:\r\n" + respuesta_serv)
+                self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                mensaje = respuesta_serv.split("\r\n")
+                comentario = " ".join(mensaje)
+                fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                
             elif metodo != ["REGISTER","INVITE", "ACK", "BYE"]:
                 respuesta_serv = ("SIP/2.0 405 Method Not Allowed\r\n\r\n")
+                print("\r\nEnviando:\r\n" + respuesta_serv)
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                mensaje = respuesta_serv.split("\r\n")
+                comentario = " ".join(mensaje)
+                fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
 
             else:
                 respuesta_serv = ("SIP/2.0 400 Bad Request\r\n\r\n")
+                print("\r\nEnviando:\r\n" + respuesta_serv)
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                mensaje = respuesta_serv.split("\r\n")
+                comentario = " ".join(mensaje)
+                fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
 
 
 if __name__ == "__main__":
@@ -147,6 +167,14 @@ if __name__ == "__main__":
        
     log = fich_xml.getElementsByTagName("log")
     log_path = log[0].attributes["path"].value
+    
+    
+    #Sacamos datos del fichero passwords.json
+    with open("passwords.json","r") as fich_passw:
+        clients_passw = {}
+        fich_passw = json.loads(fich_passw.read())
+        clients_passw = fich_passw
+        
     
     # Creamos servidor de eco y escuchamos
     serv = socketserver.UDPServer((ip_serv, int(puerto_serv)), EchoHandler)
