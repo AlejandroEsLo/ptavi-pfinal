@@ -47,6 +47,9 @@ if __name__ == "__main__":
         
     uaserver = fich_xml.getElementsByTagName("uaserver")
     ip = uaserver[0].attributes["ip"].value
+    if not ip:
+        ip = "127.0.0.1"
+    
     puerto_serv = uaserver[0].attributes["puerto"].value
         
     rtpaudio = fich_xml.getElementsByTagName("rtpaudio")
@@ -67,64 +70,69 @@ if __name__ == "__main__":
         my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         my_socket.connect((ip_proxy, int(puerto_proxy)))
 
-    # Introducioms los METODOS
-    if METODO == "register":
-        # Empezamos a escribir fich_log
-        fich_log(log_path,"starting",ip,puerto_serv,"") 
-        # Contenido que vamos a enviar (sip:emisor:puerto SIP/2.0)
-        mensaje = (METODO.upper() + " sip:" + username + ":" + puerto_serv +
-                " SIP/2.0\r\n")
-        cabecera = ("Expires: " + OPCION + "\r\n")
-        mensaje += cabecera
+        # Introducioms los METODOS
+        if METODO == "register":
+            # Empezamos a escribir fich_log
+            fich_log(log_path,"starting",ip,puerto_serv,"") 
+            # Contenido que vamos a enviar (sip:emisor:puerto SIP/2.0)
+            mensaje = (METODO.upper() + " sip:" + username + ":" + puerto_serv 
+                       + " SIP/2.0\r\n")
+            cabecera = ("Expires: " + OPCION + "\r\n")
+            mensaje += cabecera
+            
+        elif METODO == "invite":
+            # Contenido que vamos a enviar (sip:receptor SIP/2.0)
+            mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
+            cabecera = ("Content-Type: application/sdp\r\n\r\n"
+                        + "v=0\r\n"
+                        + "o=" + username + " " + ip + "\r\n"
+                        + "s=misesion" + "\r\n"
+                        + "t=0" + "\r\n"
+                        + "m=audio " + puerto_rtp + " RTP" + "\r\n")
+            mensaje += cabecera
+            
+        elif METODO == "bye":
+            # Contenido que vamos a enviar (sip:receptor SIP/2.0)
+            mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
+            
+        else:
+            sys.exit("Metodo no valido, utiliza : REGISTER,INVITE O BYE")
         
-    elif METODO == "invite":
-        # Contenido que vamos a enviar (sip:receptor SIP/2.0)
-        mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
-        cabecera = ("Content-Type: application/sdp\r\n\r\n" +
-        "v=0\r\n" +
-        "o=" + username + " " + ip + "\r\n" +
-        "s=misesion" + "\r\n" +
-        "t=0" + "\r\n" +
-        "m=audio " + puerto_rtp + " RTP" + "\r\n")
-        mensaje += cabecera
+        print("\r\nEnviando:\r\n" + mensaje)
+    
+        # Escribimos lo que enviamos en fich_log    
+        mensj = mensaje.split("\r\n")
+        comentario = " ".join(mensj)
+        fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)    
         
-    elif METODO == "bye":
-        # Contenido que vamos a enviar (sip:receptor SIP/2.0)
-        mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
+        try:
+            my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
         
-    else:
-        sys.exit("Metodo no valido, utiliza : REGISTER,INVITE O BYE")
+            # FALTA RECEPCION DE DATOS!!!!!!!!!!!!
     
-    print("\r\nEnviando:\r\n" + mensaje)
-
-    # Escribimos lo que enviamos en fich_log    
-    mensj = mensaje.split("\r\n")
-    comentario = " ".join(mensj)
-    fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)    
-    
-    my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
-
-
-    # FALTA RECEPCION DE DATOS!!!!!!!!!!!!
-
-
-    data = my_socket.recv(1024)       
-    respuesta_serv = data.decode('utf-8')
-    # End para quitar espacio print
-    print('Recibido:')
-    print(data.decode('utf-8'))
-    
-    if respuesta_serv == ("SIP/2.0 100 Trying\r\n\r\n"
-                            + "SIP/2.0 180 Ringing\r\n\r\n"
-                            + "SIP/2.0 200 OK\r\n\r\n"):
-        METODO = "ACK"
-        mensaje = (METODO.upper() + " sip:" + LOGIN + "@" + IP_RECEPTOR
-        + " SIP/2.0\r\n")
-
-        print("Enviando: " + mensaje)
-        my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
-        data = my_socket.recv(1024)
-    
-    print("Terminando socket...")
-    my_socket.close()
-    print("Fin.")
+        
+            data = my_socket.recv(1024)       
+            respuesta_serv = data.decode('utf-8')
+            # End para quitar espacio print
+            print('Recibido:')
+            print(data.decode('utf-8'))
+            
+            if respuesta_serv == ("SIP/2.0 100 Trying\r\n\r\n"
+                                    + "SIP/2.0 180 Ringing\r\n\r\n"
+                                    + "SIP/2.0 200 OK\r\n\r\n"):
+                METODO = "ACK"
+                mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
+        
+                print("Enviando: " + mensaje)
+                my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
+                data = my_socket.recv(1024)
+            
+            print("Terminando socket...")
+            my_socket.close()
+            print("Fin.")
+           
+        except ConnectionRefusedError:
+            comentario = ("No server listening at "+ ip_proxy + " port "
+                          + puerto_proxy)
+            fich_log(log_path, "error", ip_proxy, puerto_proxy, comentario)
+            sys.exit("Error: No server listening")
