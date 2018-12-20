@@ -57,8 +57,8 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 expires = int(mensaje_cliente[3].split("\r\n")[0])
                 cliente_sip = mensaje_cliente[1].split(":")[1]
                 cliente_puerto = int(mensaje_cliente[1].split(":")[-1])
-                                
-                
+
+        
                 # Cogemos localtime para que sea conformea nuestra hora local
                 t_inicio = time.strftime("%Y-%m-%d %H:%M:%S",
                                         time.localtime(int(time.time())))
@@ -66,10 +66,33 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                                       time.localtime(int(time.time() + expires)))
 
                 
+                self.list_serv = {}
+                usuarios_expires = []
+                self.list_serv["IP"] = Ip_client
+                self.list_serv["PUERTO"] = cliente_puerto              
+                self.list_serv["EXPIRES"] = t_expires
+                self.register_clients[cliente_sip] = self.list_serv
+                print(cliente_sip, "REGISTRADO\n")
+                # Eliminamos cliente si expires = 0
+                # O si su tiempo es menor que la hora actual
+                for clients in self.register_clients:
+                    inf = self.register_clients[clients]
+                    if inf["EXPIRES"] <= t_inicio:
+                        usuarios_expires.append(clients)
+                        
+                for usuario in usuarios_expires:
+                    print(usuario.split(":")[-1], "EXPIRADO\n")
+                    del self.register_clients[usuario]
+                
                 self.register2json()
+                
+                print("Expires: {}".format(expires))
+                print("Cliente: {}".format(cliente_sip))
+                print("puerto: {}".format(cliente_puerto))
+                
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-                print("Usuario Registrado: {}".format(register_clients))
+                print("Usuario Registrado: {}".format(self.register_clients))
                     
             elif metodo == "INVITE":
                 comentario = " ".join(linea_coment)
@@ -80,24 +103,25 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     #Si el cliente esta en nuestra lista....
                     print("Usuario Registrado: {}".format(ip_destino))
                                     
-                    ip_destinatario = (self.register_clients[ip_destino]["direccion"])
-                    puerto_destinatario =(self.register_clients[ip_destino]["puerto"])
+                    ip_destinatario = (self.register_clients[ip_destino]["IP"])
+                    puerto_destinatario =(self.register_clients[ip_destino]["PUERTO"])
                     
-                    fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
-                                    
                     # Creamos el socket para conectarnos con el otro cliente
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
                         my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                         my_socket.connect((ip_destinatario, int(puerto_destinatario)))
-                        my_socket.send(bytes(linea_coment, 'utf-8') + b'\r\n')
+                        fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
+                        print('DUDA:'+ str(line))
+                    
+                        my_socket.send(line)
                         data = my_socket.recv(1024)
             
                         print('Recibido:')
                         print(data.decode('utf-8'))
                 
-                        comentario = " ".join(data)
+                        comentario = str(data)
                         fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
-                        self.wfile.write(bytes(data, "utf-8"))
+                        self.wfile.write(data)
                 else:
                     #Si el cliente NO esta en nuestra lista....
                     respuesta_serv = "SIP/2.0 404 User Not Found"
