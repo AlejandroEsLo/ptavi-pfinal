@@ -6,6 +6,7 @@ import socket
 import sys
 import time
 from xml.dom import minidom
+import hashlib
 
 def fich_log(fich, evento, ip, port, coment):
     # Cogemos localtime para que sea conformea nuestra hora local
@@ -108,25 +109,52 @@ if __name__ == "__main__":
         try:
             my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
         
-            # FALTA RECEPCION DE DATOS!!!!!!!!!!!!
-    
-        
             data = my_socket.recv(1024)       
-            respuesta_serv = data.decode('utf-8')
+            recepcion = data.decode('utf-8').split("\r\n")
+            #respuesta_serv = recepcion[0]
             # End para quitar espacio print
-            print('Recibido:')
-            print(data.decode('utf-8'))
             
-            if respuesta_serv == ("SIP/2.0 100 Trying\r\n\r\n"
+            print("Respuesta Recibida: \n" + data.decode('utf-8'))
+                        
+            
+            if recepcion[0] == ("SIP/2.0 100 Trying\r\n\r\n"
                                     + "SIP/2.0 180 Ringing\r\n\r\n"
                                     + "SIP/2.0 200 OK\r\n\r\n"):
                 METODO = "ACK"
                 mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
         
-                print("Enviando: " + mensaje)
+                print("Enviando: \n" + mensaje)
                 my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
                 data = my_socket.recv(1024)
+                comentario = mensaje.split("\r\n")
+                fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)
             
+            elif recepcion[0] == ("SIP/2.0 401 Unauthorized"):
+                # Metemos cabecera autenticacion con la funcion HASH
+                h = hashlib.md5()
+                nonce = recepcion[1].split("=")[-1]
+                nonce = nonce.split("\"")[1]
+                h.update(bytes(passwd, 'utf-8'))
+                h.update(bytes(nonce, 'utf-8'))
+                
+                mensaje = (METODO.upper() + " sip:" + username + ":" 
+                        + puerto_serv + " SIP/2.0\r\n" + "Expires: " + OPCION 
+                        + "\r\n" + "Authorization: Digest response=\"" 
+                        + h.hexdigest() + "\"" + "\r\n")
+        
+                print("Enviando: \n" + mensaje)
+                my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
+                comentario = mensaje.split("\r\n")
+                comentario = " ".join(comentario)                
+                fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)
+                data = my_socket.recv(1024)
+                mensaje_recibido = data.decode('utf-8')
+                
+                print("Recibido: \n" + mensaje_recibido)
+                comentario = mensaje_recibido.split("\r\n")
+                comentario = " ".join(comentario)
+                fich_log(log_path, "received", ip_proxy, puerto_proxy, comentario)
+                
             print("Terminando socket...")
             my_socket.close()
             print("Fin.")

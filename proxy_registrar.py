@@ -5,9 +5,10 @@
 import socketserver
 import sys
 import socket
-import os
 import json
 import time
+import random
+import hashlib
 from xml.dom import minidom
 from uaclient import fich_log
 
@@ -45,7 +46,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
             mensaje_cliente = line.decode("utf-8").split(" ")
             
             # Escribe dirección y puerto del cliente (de tupla client_address)
-            print("El cliente nos manda ", ' '.join(mensaje_cliente))
+            print("\nEl cliente nos manda ", ' '.join(mensaje_cliente))
             
             linea_coment = line.decode("utf-8").split("\r\n")
             Ip_client = str(self.client_address[0])
@@ -58,42 +59,89 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 cliente_sip = mensaje_cliente[1].split(":")[1]
                 cliente_puerto = int(mensaje_cliente[1].split(":")[-1])
 
-        
-                # Cogemos localtime para que sea conformea nuestra hora local
-                t_inicio = time.strftime("%Y-%m-%d %H:%M:%S",
-                                        time.localtime(int(time.time())))
-                t_expires = time.strftime("%Y-%m-%d %H:%M:%S",
-                                      time.localtime(int(time.time() + expires)))
-
-                
-                self.list_serv = {}
-                usuarios_expires = []
-                self.list_serv["IP"] = Ip_client
-                self.list_serv["PUERTO"] = cliente_puerto              
-                self.list_serv["EXPIRES"] = t_expires
-                self.register_clients[cliente_sip] = self.list_serv
-                print(cliente_sip, "REGISTRADO\n")
-                # Eliminamos cliente si expires = 0
-                # O si su tiempo es menor que la hora actual
-                for clients in self.register_clients:
-                    inf = self.register_clients[clients]
-                    if inf["EXPIRES"] <= t_inicio:
-                        usuarios_expires.append(clients)
-                        
-                for usuario in usuarios_expires:
-                    print(usuario.split(":")[-1], "EXPIRADO\n")
-                    del self.register_clients[usuario]
-                
-                self.register2json()
-                
-                print("Expires: {}".format(expires))
-                print("Cliente: {}".format(cliente_sip))
-                print("puerto: {}".format(cliente_puerto))
-                
-                respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
-                self.wfile.write(bytes(respuesta_serv, "utf-8"))
-                print("Usuario Registrado: {}".format(self.register_clients))
+                if len(mensaje_cliente) == 4:
+                # Register no autorizado, enviamos 401 Unauthorized
+                    comentario = " ".join(mensaje_cliente)
+                    fich_log(log_path,"received",Ip_client,Port_client,comentario)
+                    nonce = random.randint(0, 10**15)
                     
+                    if cliente_sip in clients_passw:
+                        clients_passw["nonce"] = nonce
+                        respuesta_serv = ("SIP/2.0 401 Unauthorized\r\n"
+                                        + "WWW Authenticate: Digest nonce="
+                                        + "\"" + str(nonce) + "\"" + "\r\n")
+                        print("Respuesta enviada: \n"+ respuesta_serv)
+                        
+                    else:
+                        respuesta_serv = ("SIP/2.0 404 User Not Found\r\n\r\n")
+                        print("El cliente no esta en la lista de contraseñas")
+                    
+                    self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                    comentario = " ".join(respuesta_serv)
+                    fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                       
+                else:                
+                    # Comprobamos la contraseña recibida para ver si es correcta
+                    passw_hash = mensaje_cliente[-1].split("=")[-1]
+                    passw_hash = passw_hash.split("\"")[1]
+                    
+                    comentario = " ".join(mensaje_cliente)
+                    fich_log(log_path,"received",Ip_client,Port_client,comentario)
+                    print("\r\ncontraseña recibida= " + str(passw_hash))
+                    h = hashlib.md5()
+                    if cliente_sip in clients_passw:
+                        h.update(bytes(clients_passw[cliente_sip], 'utf-8'))
+                        h.update(bytes(str(clients_passw["nonce"]), 'utf-8'))
+                    
+                    nueva_contraseña = h.hexdigest()
+                    print("contraseña creada para comparar= " +nueva_contraseña+ "\r\n")    
+                    
+                    if nueva_contraseña == passw_hash:
+                        # Si coinciden las contraseñas , registramos el cliente
+                        # Cogemos localtime para que sea conforme a nuestra hora local
+                        t_inicio = time.strftime("%Y-%m-%d %H:%M:%S",
+                                                time.localtime(int(time.time())))
+                        t_expires = time.strftime("%Y-%m-%d %H:%M:%S",
+                                              time.localtime(int(time.time() + expires)))
+                        
+                        self.list_serv = {}
+                        usuarios_expires = []
+                        self.list_serv["IP"] = Ip_client
+                        self.list_serv["PUERTO"] = cliente_puerto              
+                        self.list_serv["EXPIRES"] = t_expires
+                        self.register_clients[cliente_sip] = self.list_serv
+                        print(cliente_sip, "REGISTRADO\n")
+                        # Eliminamos cliente si expires = 0
+                        # O si su tiempo es menor que la hora actual
+                        for clients in self.register_clients:
+                            inf = self.register_clients[clients]
+                            if inf["EXPIRES"] <= t_inicio:
+                                usuarios_expires.append(clients)
+                                
+                        for usuario in usuarios_expires:
+                            print(usuario.split(":")[-1], "EXPIRADO\n")
+                            del self.register_clients[usuario]
+                        
+                        self.register2json()
+                        
+                        respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
+                        self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                        print("Usuario Registrado: {}".format(self.register_clients))
+                        comentario = " ".join(respuesta_serv)
+                        fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                       
+                    else:                        
+                        respuesta_serv = ("SIP/2.0 401 Unauthorized\r\n"
+                                        + "WWW Authenticate: Digest nonce="
+                                        + "\"" + str(random.randint(0,10**15)) 
+                                        + "\"" + "\r\n\r\n")
+                        
+                        print("Respuesta enviada: \n" + respuesta_serv)
+                        self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                        comentario = " ".join(respuesta_serv)
+                        fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                       
+                        
             elif metodo == "INVITE":
                 comentario = " ".join(linea_coment)
                 fich_log(log_path,"received",Ip_client,Port_client,comentario)                
@@ -111,8 +159,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                         my_socket.connect((ip_destinatario, int(puerto_destinatario)))
                         fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
-                        print('DUDA:'+ str(line))
-                    
+                                            
                         my_socket.send(line)
                         data = my_socket.recv(1024)
             
