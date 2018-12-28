@@ -111,9 +111,7 @@ if __name__ == "__main__":
         
             data = my_socket.recv(1024)       
             recepcion = data.decode('utf-8').split("\r\n")
-            #respuesta_serv = recepcion[0]
-            # End para quitar espacio print
-            
+                        
             print("Respuesta Recibida: \n" + data.decode('utf-8'))
                         
             
