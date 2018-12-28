@@ -15,6 +15,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
     def handle(self):
         """Manejador del servidor."""
+            
         while 1:
             # Leyendo línea a línea lo que nos envía el cliente
             line = self.rfile.read()
@@ -25,17 +26,39 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
             # Escribe dirección y puerto del cliente (de tupla client_address)
             print("El cliente nos manda " + line.decode('utf-8'))
-
+            
             mensaje_cliente = line.decode("utf-8").split(" ")
             metodo = mensaje_cliente[0]
             Ip = self.client_address[0]
+            Puerto = int(self.client_address[1])
+            
+            mensaje = line.decode("utf-8").split("\r\n")   
+            comentario = " ".join(mensaje)
+            # Escribimos lo que vamos recibiendo
+            fich_log(log_path,"received",Ip,Puerto,comentario) 
+        
 
             if metodo == "INVITE":
                 respuesta_serv = ("SIP/2.0 100 Trying\r\n\r\n"
                                   + "SIP/2.0 180 Ringing\r\n\r\n"
                                   + "SIP/2.0 200 OK\r\n\r\n")
-                self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                cabecera = ("Content-Type: application/sdp\r\n\r\n"
+                        + "v=0\r\n"
+                        + "o=" + username + " " + ip + "\r\n"
+                        + "s=misesion" + "\r\n"
+                        + "t=0" + "\r\n"
+                        + "m=audio " + puerto_rtp + " RTP" + "\r\n")
+                
+                respuesta_serv += cabecera
 
+                print("Respuesta Enviada: " + respuesta_serv)
+
+                self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                respuesta_serv = respuesta_serv.split("\r\n")
+                comentario = " ".join(respuesta_serv)
+                fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
+            
+            # FALTAA METODO ACK !!!!!!!!!!!!!!!!
             elif metodo == "ACK":
                 # aEjecutar es un string con lo que ejcutara en la shell
                 aEjecutar = ("mp32rtp -i " + Ip + " -p 23032 < " + audio_path)
@@ -44,16 +67,27 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
             elif metodo == "BYE":
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
+                print("Respuesta Enviada: " + respuesta_serv)
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-
+                respuesta_serv = respuesta_serv.split("\r\n")
+                comentario = " ".join(respuesta_serv)
+                fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
+                fich_log(log_path,"finishing",Ip,Puerto,"") 
+        
             elif metodo != ["INVITE", "ACK", "BYE"]:
                 respuesta_serv = ("SIP/2.0 405 Method Not Allowed\r\n\r\n")
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-
+                respuesta_serv = respuesta_serv.split("\r\n")
+                comentario = " ".join(respuesta_serv)
+                fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
+                
             else:
                 respuesta_serv = ("SIP/2.0 400 Bad Request\r\n\r\n")
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
-
+                respuesta_serv = respuesta_serv.split("\r\n")
+                comentario = " ".join(respuesta_serv)
+                fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
+                
 
 if __name__ == "__main__":
     
@@ -97,6 +131,8 @@ if __name__ == "__main__":
         # Creamos servidor de eco y escuchamos
         serv = socketserver.UDPServer((ip, int(puerto_serv)), EchoHandler)
         print("Listening...")
+        # Empezamos a escribir fich_log
+        fich_log(log_path,"starting",ip,puerto_serv,"") 
         
         try:
             serv.serve_forever()
