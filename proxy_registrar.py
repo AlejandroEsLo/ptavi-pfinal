@@ -61,7 +61,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
                 if len(mensaje_cliente) == 4:
                 # Register no autorizado, enviamos 401 Unauthorized
-                    comentario = " ".join(mensaje_cliente)
+                    comentario = " ".join(linea_coment)
                     fich_log(log_path,"received",Ip_client,Port_client,comentario)
                     nonce = random.randint(0, 10**15)
                     
@@ -77,7 +77,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         print("El cliente no esta en la lista de contraseñas")
                     
                     self.wfile.write(bytes(respuesta_serv, "utf-8"))
-                    comentario = " ".join(respuesta_serv)
+                    comentario = respuesta_serv
                     fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
                        
                 else:                
@@ -85,7 +85,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     passw_hash = mensaje_cliente[-1].split("=")[-1]
                     passw_hash = passw_hash.split("\"")[1]
                     
-                    comentario = " ".join(mensaje_cliente)
+                    comentario = " ".join(linea_coment)
                     fich_log(log_path,"received",Ip_client,Port_client,comentario)
                     print("\r\ncontraseña recibida= " + str(passw_hash))
                     h = hashlib.md5()
@@ -127,7 +127,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                         self.wfile.write(bytes(respuesta_serv, "utf-8"))
                         print("Usuario Registrado: {}".format(self.register_clients))
-                        comentario = " ".join(respuesta_serv)
+                        comentario = respuesta_serv
                         fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
                        
                     else:                        
@@ -139,8 +139,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         print("Respuesta enviada: \n" + respuesta_serv)
                         self.wfile.write(bytes(respuesta_serv, "utf-8"))
                         comentario = " ".join(respuesta_serv)
-                        fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
-                       
+                        fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)   
                         
             elif metodo == "INVITE":
                 comentario = " ".join(linea_coment)
@@ -149,8 +148,6 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 # Comprobamos si esta registrado el destinatario del mensaje en nuestra lista
                 if ip_destino in self.register_clients:
                     #Si el cliente esta en nuestra lista....
-                    print("Usuario Registrado: {}".format(ip_destino))
-                                    
                     ip_destinatario = (self.register_clients[ip_destino]["IP"])
                     puerto_destinatario =(self.register_clients[ip_destino]["PUERTO"])
                     
@@ -159,16 +156,26 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                         my_socket.connect((ip_destinatario, int(puerto_destinatario)))
                         fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
-                                            
-                        my_socket.send(line)
-                        data = my_socket.recv(1024)
+                        
+                        try: 
+                            my_socket.send(line)
+                            data = my_socket.recv(1024)
+
+                            print('Recibido:')
+                            print(data.decode('utf-8'))
+                            
+                            mensaje = data.decode("utf-8").split("\r\n")   
+                            comentario = " ".join(mensaje)
             
-                        print('Recibido:')
-                        print(data.decode('utf-8'))
-                
-                        comentario = str(data)
-                        fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
-                        self.wfile.write(data)
+                            fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                            self.wfile.write(data)
+                        
+                        except ConnectionRefusedError:
+                            comentario = ("No server listening at "+ ip_destinatario + " port "
+                                            + str(puerto_destinatario))
+                            fich_log(log_path, "error", ip_destinatario, puerto_destinatario, comentario)
+                            print("Error: No server listening")
+                            self.wfile.write(bytes("Error: No server listening", "utf-8"))
                 else:
                     #Si el cliente NO esta en nuestra lista....
                     respuesta_serv = "SIP/2.0 404 User Not Found"
@@ -178,13 +185,13 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     mensaje = respuesta_serv.split("\r\n")
                     comentario = " ".join(mensaje)
                     fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
-                
+            # FALTA ACK Y BYE CORRECTO!!!!!!!!!!!
             elif metodo == "ACK":
                 # aEjecutar es un string con lo que ejcutara en la shell
           #      aEjecutar = ("mp32rtp -i " + Ip + " -p 23032 < " + audio_path)
           #      print("Vamos a ejecutar", aEjecutar)
           #      os.system(aEjecutar)
-                  print("ACK")
+                  print("ACK PROXY")
 
             elif metodo == "BYE":
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
@@ -257,3 +264,4 @@ if __name__ == "__main__":
         serv.serve_forever()
     except KeyboardInterrupt:
         print("Finalizado servidor")
+    
