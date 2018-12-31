@@ -58,13 +58,17 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 comentario = " ".join(respuesta_serv)
                 fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
             
-            # FALTAA METODO ACK !!!!!!!!!!!!!!!!
+            # FALTAA COMPROBAR METODO ACK (RTP)!!!!!!!!!!!!!!!!
             elif metodo == "ACK":
-                # aEjecutar es un string con lo que ejcutara en la shell
-                aEjecutar = ("mp32rtp -i " + Ip + " -p 23032 < " + audio_path)
+                # aEjecutar es un string con lo que ejcutara en la shell               
+                aEjecutar = ("mp32rtp -i " + Ip + " -p " + str(Puerto))
+                aEjecutar += " < " + audio_path
                 print("Vamos a ejecutar", aEjecutar)
                 os.system(aEjecutar)
-
+                
+                comentario = "ACK"
+                fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
+                
             elif metodo == "BYE":
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                 print("Respuesta Enviada: " + respuesta_serv)
@@ -88,7 +92,6 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 comentario = " ".join(respuesta_serv)
                 fich_log(log_path,"sent_to",Ip,Puerto,comentario) 
                 
-
 if __name__ == "__main__":
     
     try:

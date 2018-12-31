@@ -5,6 +5,7 @@
 import socket
 import sys
 import time
+import os
 from xml.dom import minidom
 import hashlib
 
@@ -100,33 +101,39 @@ if __name__ == "__main__":
             sys.exit("Metodo no valido, utiliza : REGISTER,INVITE O BYE")
         
         print("\r\nEnviando:\r\n" + mensaje)
-    
+        my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')    
+            
         # Escribimos lo que enviamos en fich_log    
         mensj = mensaje.split("\r\n")
         comentario = " ".join(mensj)
         fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)    
         
         try:
-            my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
-        
             data = my_socket.recv(1024)       
             recepcion = data.decode('utf-8').split("\r\n")
                         
             print("Respuesta Recibida: \n" + data.decode('utf-8'))
                         
-            
-            if recepcion[0] == ("SIP/2.0 100 Trying\r\n\r\n"
-                                    + "SIP/2.0 180 Ringing\r\n\r\n"
-                                    + "SIP/2.0 200 OK\r\n\r\n"):
+            if recepcion[0] == ("SIP/2.0 100 Trying"):
+                
                 METODO = "ACK"
                 mensaje = (METODO.upper() + " sip:" + OPCION + " SIP/2.0\r\n")
-        
+            
                 print("Enviando: \n" + mensaje)
                 my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')
-                data = my_socket.recv(1024)
-                comentario = mensaje.split("\r\n")
+                comentario = mensaje.split("\r\n")                
+                comentario = " ".join(comentario)
                 fich_log(log_path, "sent_to", ip_proxy, puerto_proxy, comentario)
-            
+                
+                # Envio RTP               
+                Ip_rtp = recepcion[9].split(" ")[1]              
+                Puerto_rtp = recepcion[12].split(" ")[1] 
+                
+                aEjecutar = ("mp32rtp -i " + Ip_rtp + " -p " + str(Puerto_rtp))
+                aEjecutar += " < " + audio_path
+                print("Vamos a ejecutar", aEjecutar)
+                os.system(aEjecutar)
+                
             elif recepcion[0] == ("SIP/2.0 401 Unauthorized"):
                 # Metemos cabecera autenticacion con la funcion HASH
                 h = hashlib.md5()
@@ -151,6 +158,10 @@ if __name__ == "__main__":
                 print("Recibido: \n" + mensaje_recibido)
                 comentario = mensaje_recibido.split("\r\n")
                 comentario = " ".join(comentario)
+                fich_log(log_path, "received", ip_proxy, puerto_proxy, comentario)
+
+            elif recepcion[0] == ("SIP/2.0 200 OK"):
+                comentario = data.decode('utf-8')
                 fich_log(log_path, "received", ip_proxy, puerto_proxy, comentario)
                 
             print("Terminando socket...")

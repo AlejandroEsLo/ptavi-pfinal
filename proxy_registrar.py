@@ -41,8 +41,8 @@ class EchoHandler(socketserver.DatagramRequestHandler):
             if not line:
                 break
             
-            """handle method of the server class."""
-            self.json2registered()
+            self.json2registered()# Reestablecer los usuarios conectados
+            
             mensaje_cliente = line.decode("utf-8").split(" ")
             
             # Escribe dirección y puerto del cliente (de tupla client_address)
@@ -185,24 +185,78 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     mensaje = respuesta_serv.split("\r\n")
                     comentario = " ".join(mensaje)
                     fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
-            # FALTA ACK Y BYE CORRECTO!!!!!!!!!!!
+            #COMPROBAR ACK mp32rtp EN LABORATORIOS
             elif metodo == "ACK":
-                # aEjecutar es un string con lo que ejcutara en la shell
-          #      aEjecutar = ("mp32rtp -i " + Ip + " -p 23032 < " + audio_path)
-          #      print("Vamos a ejecutar", aEjecutar)
-          #      os.system(aEjecutar)
-                  print("ACK PROXY")
-
-            elif metodo == "BYE":
-                respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
-                self.wfile.write(bytes(respuesta_serv, "utf-8"))
-                print("\r\nEnviando:\r\n" + respuesta_serv)
-                self.wfile.write(bytes(respuesta_serv, "utf-8"))
-                mensaje = respuesta_serv.split("\r\n")
+                mensaje = line.decode("utf-8").split("\r\n")   
                 comentario = " ".join(mensaje)
-                fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                ip_destino = mensaje_cliente[1].split(":")[1]
+                ip_destinatario = (self.register_clients[ip_destino]["IP"])
+                puerto_destinatario =(self.register_clients[ip_destino]["PUERTO"])
+                    
+                fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
                 
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                    my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    my_socket.connect((ip_destinatario, int(puerto_destinatario)))
+                    my_socket.send(line)
+                    print("\r\nEnviando:\r\n" + comentario)
+                    mensaje = line.decode("utf-8").split("\r\n")
+                    comentario = " ".join(mensaje)
+                    fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+            # FALTA BYE CORRECTO!!!!!!!!!!!
+                            
+            elif metodo == "BYE":
+                mensaje = line.decode("utf-8").split("\r\n")   
+                comentario = " ".join(mensaje)
+                ip_destino = mensaje_cliente[1].split(":")[1]
+                    
+                if ip_destino in self.register_clients:
+                    #Si el cliente esta en nuestra lista....
+                    ip_destinatario = (self.register_clients[ip_destino]["IP"])
+                    puerto_destinatario =(self.register_clients[ip_destino]["PUERTO"])
+
+                    fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                                    
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                        my_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        my_socket.connect((ip_destinatario, int(puerto_destinatario)))
+                        my_socket.send(line)
+                        
+                        print("\r\nEnviando:\r\n" + comentario)
+                        mensaje = line.decode("utf-8").split("\r\n")   
+                        comentario = " ".join(mensaje)
+                        fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
+                    
+                        data = my_socket.recv(1024)
+                        mensaje = data.decode("utf-8").split("\r\n")   
+                        comentario = " ".join(mensaje)
+                        fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                        print("\r\nRecibido:\r\n" + comentario)
+                        
+                        self.wfile.write(data)
+                        print("\r\nEnviando:\r\n" + comentario)
+                        mensaje = line.decode("utf-8").split("\r\n")   
+                        comentario = " ".join(mensaje)
+                        fich_log(log_path,"sent_to",ip_destinatario,puerto_destinatario,comentario)                
+                    
+                else:#Si el cliente no esta registrado
+                
+                    print("Usuario " + ip_destino + " no registrado")
+                    respuesta_serv = ("SIP/2.0 404 User Not Found")
+                    self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                    
+                    print("\r\nEnviando:\r\n" + respuesta_serv)
+                    self.wfile.write(bytes(respuesta_serv, "utf-8"))
+                    mensaje = respuesta_serv.split("\r\n")
+                    comentario = " ".join(mensaje)
+                    fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
+                    
             elif metodo != ["REGISTER","INVITE", "ACK", "BYE"]:
+                mensaje = data.decode("utf-8").split("\r\n")   
+                comentario = " ".join(mensaje)
+            
+                fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                self.wfile.write(data)
                 respuesta_serv = ("SIP/2.0 405 Method Not Allowed\r\n\r\n")
                 print("\r\nEnviando:\r\n" + respuesta_serv)
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
@@ -211,6 +265,11 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 fich_log(log_path,"sent_to",Ip_client,Port_client,comentario)
 
             else:
+                mensaje = data.decode("utf-8").split("\r\n")   
+                comentario = " ".join(mensaje)
+            
+                fich_log(log_path,"received",ip_destinatario,puerto_destinatario,comentario)                
+                self.wfile.write(data)
                 respuesta_serv = ("SIP/2.0 400 Bad Request\r\n\r\n")
                 print("\r\nEnviando:\r\n" + respuesta_serv)
                 self.wfile.write(bytes(respuesta_serv, "utf-8"))
