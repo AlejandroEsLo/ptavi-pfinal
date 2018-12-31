@@ -1,6 +1,6 @@
 REQUISITOS AVANZADOS:
 
-1)Reestablecer los usuarios conectados
+1)Reestablecer los usuarios conectados:
 
 	Implementar en el proxy registrar la funcionalidad para que tome los datos del fichero
 	de base de datos con usuarios ya registrados cuando se ejecute, mediante al funcion creada "json2registered".
