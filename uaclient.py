@@ -11,6 +11,7 @@ import hashlib
 
 
 def fich_log(fich, evento, ip, port, coment):
+    """Crea fichero log."""
     # Cogemos localtime para que sea conformea nuestra hora local
     hora = time.strftime("%Y%m%d%H%M%S", time.localtime(time.time()))
     fich = open(fich, "a")
@@ -20,7 +21,7 @@ def fich_log(fich, evento, ip, port, coment):
         fich.write(" Sent to " + ip + ":" + str(port) + ": " + coment + "\r\n")
     elif evento == "received":
         fich.write(" Received from " + ip + ":" + str(port)
-                    + ": " + coment + "\r\n")
+                   + ": " + coment + "\r\n")
     elif evento == "error":
         fich.write(" Error: " + coment + "\r\n")
     elif evento == "starting":
@@ -113,7 +114,7 @@ if __name__ == "__main__":
             recepcion = data.decode('utf-8').split("\r\n")
             comentario = " ".join(recepcion)
             fich_log(log_path, "received", ip_proxy, puerto_proxy,
-                         comentario)
+                     comentario)
             print("Respuesta Recibida: \n" + data.decode('utf-8'))
 
             if recepcion[0] == ("SIP/2.0 100 Trying"):
@@ -148,9 +149,10 @@ if __name__ == "__main__":
                 h.update(bytes(nonce, 'utf-8'))
 
                 mensaje = (METODO.upper() + " sip:" + username + ":"
-                        + puerto_serv + " SIP/2.0\r\n" + "Expires: " + OPCION
-                        + "\r\n" + "Authorization: Digest response=\""
-                        + h.hexdigest() + "\"" + "\r\n")
+                           + puerto_serv + " SIP/2.0\r\n" + "Expires: "
+                           + OPCION + "\r\n"
+                           + "Authorization: Digest response=\""
+                           + h.hexdigest() + "\"" + "\r\n")
 
                 print("Enviando: \n" + mensaje)
                 my_socket.send(bytes(mensaje, 'utf-8') + b'\r\n')

@@ -12,8 +12,9 @@ from uaclient import fich_log
 
 class EchoHandler(socketserver.DatagramRequestHandler):
     """Echo server class."""
-    
-    emisor = [0, 0] # IP y PUERTO del emisor
+
+    emisor = [0, 0]  # IP y PUERTO del emisor
+
     def handle(self):
         """Manejador del servidor."""
         Ip = self.client_address[0]
@@ -29,16 +30,15 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
             # Escribe dirección y puerto del cliente (de tupla client_address)
             print("El cliente nos manda " + line.decode('utf-8'))
-            
+
             mensaje_cliente = line.decode("utf-8").split(" ")
             metodo = mensaje_cliente[0]
-            
+
             mensaje = line.decode("utf-8").split("\r\n")
             comentario = " ".join(mensaje)
             # Escribimos lo que vamos recibiendo
             fich_log(log_path, "received", Ip, Puerto, comentario)
-            
-            
+
             if metodo == "INVITE":
                 puerto_rtp_emisor = mensaje_cliente[5]
                 self.emisor[1] = puerto_rtp_emisor
@@ -47,11 +47,11 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                                   + "SIP/2.0 180 Ringing\r\n\r\n"
                                   + "SIP/2.0 200 OK\r\n\r\n")
                 cabecera = ("Content-Type: application/sdp\r\n\r\n"
-                        + "v=0\r\n"
-                        + "o=" + username + " " + ip + "\r\n"
-                        + "s=misesion" + "\r\n"
-                        + "t=0" + "\r\n"
-                        + "m=audio " + puerto_rtp + " RTP" + "\r\n")
+                            + "v=0\r\n"
+                            + "o=" + username + " " + ip + "\r\n"
+                            + "s=misesion" + "\r\n"
+                            + "t=0" + "\r\n"
+                            + "m=audio " + puerto_rtp + " RTP" + "\r\n")
 
                 respuesta_serv += cabecera
 
@@ -72,7 +72,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 print("Enviando: \n" + mensaje)
                 comentario = mensaje.split("\r\n")
                 comentario = "".join(comentario)
-                fich_log(log_path, "sent_to", ip_proxy, puerto_proxy,
+                fich_log(log_path, "sent_to", ip_proxy, Puerto,
                          comentario)
 
                 # ENVIO RTP
@@ -81,7 +81,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 aEjecutar += " < " + audio_path
                 print("Vamos a ejecutar", aEjecutar)
                 os.system(aEjecutar)
-                
+
             elif metodo == "BYE":
                 respuesta_serv = ("SIP/2.0 200 OK\r\n\r\n")
                 print("Respuesta Enviada: " + respuesta_serv)

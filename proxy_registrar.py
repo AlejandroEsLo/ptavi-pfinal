@@ -30,10 +30,10 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
         except FileNotFoundError:
             pass
+    emisor = [0, 0]  # SIP y PUERTO del emisor
 
     def handle(self):
         """Manejador del servidor."""
-        
         self.json2registered()  # Reestablecer los usuarios conectados
 
         Ip_client = str(self.client_address[0])
@@ -69,8 +69,8 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     if cliente_sip in clients_passw:
                         clients_passw["nonce"] = nonce
                         respuesta_serv = ("SIP/2.0 401 Unauthorized\r\n"
-                                        + "WWW Authenticate: Digest nonce="
-                                        + "\"" + str(nonce) + "\"" + "\r\n")
+                                          + "WWW Authenticate: Digest nonce="
+                                          + "\"" + str(nonce) + "\"" + "\r\n")
                         print("Respuesta enviada: \n" + respuesta_serv)
 
                     else:
@@ -82,7 +82,7 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     fich_log(log_path, "sent_to", Ip_client, cliente_puerto,
                              comentario)
 
-                else:       
+                else:
                     # Comprobamos la contraseña recibida
                     passw_hash = mensaje_cliente[-1].split("=")[-1]
                     passw_hash = passw_hash.split("\"")[1]
@@ -98,15 +98,15 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
                     nueva_contraseña = h.hexdigest()
                     print("contraseña creada para comparar= "
-                           + nueva_contraseña + "\r\n")
+                          + nueva_contraseña + "\r\n")
 
                     if nueva_contraseña == passw_hash:
                         # Si coinciden las contraseñas , registramos el cliente
-                        # Cogemos localtime para que sea conforme a nuestra hora local
-                        t_inicio = time.strftime("%Y-%m-%d %H:%M:%S",
-                                            time.localtime(int(time.time())))
-                        t_expires = time.strftime("%Y-%m-%d %H:%M:%S",
-                                    time.localtime(int(time.time()+ expires)))
+                        # Cogemos localtime para que sea nuestra hora local
+                        time1 = time.localtime(int(time.time()))
+                        time2 = time.localtime(int(time.time() + expires))
+                        t_inicio = time.strftime("%Y-%m-%d %H:%M:%S", time1)
+                        t_expires = time.strftime("%Y-%m-%d %H:%M:%S", time2)
 
                         self.list_serv = {}
                         usuarios_expires = []
@@ -136,10 +136,11 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                                  cliente_puerto, comentario)
 
                     else:
+                        rand = 10**15
                         respuesta_serv = ("SIP/2.0 401 Unauthorized\r\n"
-                                        + "WWW Authenticate: Digest nonce="
-                                        + "\"" + str(random.randint(0, 10**15))
-                                        + "\"" + "\r\n\r\n")
+                                          + "WWW Authenticate: Digest nonce="
+                                          + "\"" + str(random.randint(0, rand))
+                                          + "\"" + "\r\n\r\n")
 
                         print("Respuesta enviada: \n" + respuesta_serv)
                         self.wfile.write(bytes(respuesta_serv, "utf-8"))
@@ -149,40 +150,35 @@ class EchoHandler(socketserver.DatagramRequestHandler):
 
             elif metodo == "INVITE":
                 ip_destino = mensaje_cliente[1].split(":")[1]
-                
-                # Comprobamos si esta registrado el destinatario del mensaje en nuestra lista
+                # Comprobamos si esta registrado en nuestra lista
                 if ip_destino in self.register_clients:
                     # Si el cliente esta en nuestra lista....
                     archv_reg = self.register_clients
                     ip_destinatario = (archv_reg[ip_destino]["IP"])
-                    puerto_destinatario =(archv_reg[ip_destino]["PUERTO"])
+                    puerto_destinatario = (archv_reg[ip_destino]["PUERTO"])
                     comentario = " ".join(linea_coment)
-                    
-                    print("MENSAJE INVITE == " + str(mensaje_cliente))
-                    print("Client_addess == " + str(self.client_address))
-                    print("Puerto cliente == " + str(Port_client))
-                    
-                    # Sacamos el emisor del mensaje!!!!!!!!!!!!
-                    print("\r\nDATOS SACADOS DEL FICHERO REGISTER: ")
-                    
+
                     mensaje_emisor = line.decode("utf-8").split("\r\n")
                     mensaje_emisor = mensaje_emisor[4].split(" ")
                     cliente_emisor = mensaje_emisor[0].split("=")[1]
-                    print("Cliente emisor == " + str(cliente_emisor))
-                    
-                    puerto_emisor =(archv_reg[cliente_emisor]["PUERTO"])
-                    print("Puerto emisor == " + str(puerto_emisor))
+
+                    puerto_emisor = (archv_reg[cliente_emisor]["PUERTO"])
+
+                    self.emisor[0] = cliente_emisor
+                    self.emisor[1] = puerto_emisor
 
                     fich_log(log_path, "received", Ip_client,
                              puerto_emisor, comentario)
                     # Creamos el socket para conectarnos con el otro cliente
-                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                    socket1 = socket.AF_INET
+                    socket2 = socket.SOCK_DGRAM
+                    with socket.socket(socket1, socket2) as my_socket:
                         my_socket.setsockopt(socket.SOL_SOCKET,
                                              socket.SO_REUSEADDR, 1)
                         my_socket.connect((ip_destinatario,
                                            int(puerto_destinatario)))
                         fich_log(log_path, "sent_to", ip_destinatario,
-                                 puerto_destinatario, comentario)      
+                                 puerto_destinatario, comentario)
 
                         try:
                             my_socket.send(line)
@@ -198,10 +194,13 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                                      puerto_destinatario, comentario)
                             self.wfile.write(data)
 
+                            fich_log(log_path, "sent_to", Ip_client,
+                                     puerto_emisor, comentario)
+
                         except ConnectionRefusedError:
                             comentario = ("No server listening at "
-                                            + ip_destinatario + " port "
-                                            + str(puerto_destinatario))
+                                          + ip_destinatario + " port "
+                                          + str(puerto_destinatario))
                             fich_log(log_path, "error", ip_destinatario,
                                      puerto_destinatario, comentario)
                             error = "Error: No server listening"
@@ -225,10 +224,13 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                 archv_reg = self.register_clients
                 ip_destinatario = (archv_reg[ip_destino]["IP"])
                 puerto_destinatario = (archv_reg[ip_destino]["PUERTO"])
+                puerto_emisor = int(self.emisor[1])
                 fich_log(log_path, "received", ip_destinatario,
-                         puerto_destinatario, comentario)
+                         puerto_emisor, comentario)
 
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                socket1 = socket.AF_INET
+                socket2 = socket.SOCK_DGRAM
+                with socket.socket(socket1, socket2) as my_socket:
                     my_socket.setsockopt(socket.SOL_SOCKET,
                                          socket.SO_REUSEADDR, 1)
                     my_socket.connect((ip_destinatario,
@@ -239,11 +241,12 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     comentario = " ".join(mensaje)
                     fich_log(log_path, "sent_to", Ip_client,
                              puerto_destinatario, comentario)
-                    
+
             elif metodo == "BYE":
                 mensaje = line.decode("utf-8").split("\r\n")
                 comentario = " ".join(mensaje)
                 ip_destino = mensaje_cliente[1].split(":")[1]
+                puerto_emisor = int(self.emisor[1])
 
                 if ip_destino in self.register_clients:
                     # Si el cliente esta en nuestra lista....
@@ -252,9 +255,11 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                     puerto_destinatario = (archv_reg[ip_destino]["PUERTO"])
 
                     fich_log(log_path, "received", ip_destinatario,
-                             puerto_destinatario, comentario)
+                             puerto_emisor, comentario)
 
-                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as my_socket:
+                    socket1 = socket.AF_INET
+                    socket2 = socket.SOCK_DGRAM
+                    with socket.socket(socket1, socket2) as my_socket:
                         my_socket.setsockopt(socket.SOL_SOCKET,
                                              socket.SO_REUSEADDR, 1)
                         my_socket.connect((ip_destinatario,
@@ -273,7 +278,8 @@ class EchoHandler(socketserver.DatagramRequestHandler):
                         fich_log(log_path, "received", ip_destinatario,
                                  puerto_destinatario, comentario)
                         print("\r\nRecibido:\r\n" + comentario)
-
+                        fich_log(log_path, "sent_to", ip_destinatario,
+                                 puerto_emisor, comentario)
                         self.wfile.write(data)
 
                 else:  # Si el cliente no esta registrado
