@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config>
     <account username = "juan@alumnos.urjc" passwd = "54312"/>
-    <uaserver ip = "" puerto = "1234"/>
+    <uaserver ip = "" puerto = "8765"/>
     <rtpaudio puerto = "5678"/>
     <regproxy ip = "127.0.0.1" puerto = "7777"/>
     <log path = "./fich_log(ua2).txt"/>
